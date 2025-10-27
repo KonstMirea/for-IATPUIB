@@ -59,54 +59,122 @@ downloaded 4.3 MB
 
 The downloaded binary packages are in
 	/var/folders/ns/z016wxgs06n20ddlstgmcgmw0000gn/T//RtmpwexTuw/downloaded_packages
-	
+
+
+### Подключение пакетов
+```{r}
+library(nycflights13)
+library(dplyr)
+```	
 
 ### Сколько встроенных в пакет nycflights13 датафреймов?
-> length(ls("package:nycflights13"))
-[1] 5
+```{r}
+length(ls("package:nycflights13"))
+```
 
 
 ### Сколько строк в каждом датафрейме?
-> sapply(ls("package:nycflights13"), function(df) nrow(get(df, "package:nycflights13")))
-airlines airports  flights   planes  weather 
-      16     1458   336776     3322    26115 
-      
+```{r}
+sapply(ls("package:nycflights13"), function(df) nrow(get(df, "package:nycflights13")))
+```
       
 ### Сколько столбцов в каждом датафрейме?
-> sapply(ls("package:nycflights13"), function(df) ncol(get(df, "package:nycflights13")))
-airlines airports  flights   planes  weather 
-       2        8       19        9       15 
+```{r}
+sapply(ls("package:nycflights13"), function(df) ncol(get(df, "package:nycflights13")))
+```
 
 
 ### Как просмотреть примерный вид датафрейма?
-> glimpse(airlines)
-Rows: 16
-Columns: 2
-$ carrier <chr> "9E", "AA", "AS", "B6", "DL", "EV", "F9", "FL", "HA", "MQ", "OO", "UA", "US", "VX", "WN", "YV"
-$ name    <chr> "Endeavor Air Inc.", "American Airlines Inc.", "Alaska Airlines Inc.", "JetBlue Airways", "Delta Air Lines Inc.", "Exp…
+```{r}
+glimpse(airlines)
+```
 
 
 ### Сколько компаний-перевозчиков (carrier) учитывают эти наборы данных (представлено в наборах данных)?
-> length(unique(nycflights13::flights$carrier))
-[1] 16
+```{r}
+length(unique(nycflights13::flights$carrier))
+```
 
 
 ### Сколько рейсов принял аэропорт John F Kennedy Intl в мае?
-> library(dplyr)
-> nycflights13::flights %>%
-+     filter(dest == "JFK", month == 5) %>%
-+     summarise(flights_count = n())
-# A tibble: 1 × 1
-  flights_count
-          <int>
-1             0
+```{r}
+nycflights13::flights %>%
+      filter(dest == "JFK", month == 5) %>%
+      summarise(flights_count = n())
+```
 
 
 ### Какой самый северный аэропорт?
-> library(dplyr)
-> nycflights13::airports %>%
-+     filter(lat == max(lat, na.rm = TRUE))
-# A tibble: 1 × 8
-  faa   name                      lat   lon   alt    tz dst   tzone
-  <chr> <chr>                   <dbl> <dbl> <dbl> <dbl> <chr> <chr>
-1 EEN   Dillant Hopkins Airport  72.3  42.9   149    -5 A     NA   
+```{r}
+nycflights13::airports %>%
+      filter(lat == max(lat, na.rm = TRUE))
+```
+
+
+### Какой аэропорт самый высокогорный (находится выше всех над уровнем моря)?
+```{r}
+airports %>%
+  filter(alt == max(alt, na.rm = TRUE))
+```
+
+
+### Какие бортовые номера у самых старых самолетов?
+```{r}
+planes %>%
+  filter(!is.na(year)) %>%
+  arrange(year) %>%
+  select(tailnum, year) %>%
+  head(10)
+```
+
+
+### Какая средняя температура воздуха была в сентябре в аэропорту John F Kennedy Intl (в градусах Цельсия).
+```{r}
+weather %>%
+  filter(origin == "JFK", month == 9) %>%
+  summarise(mean_temp_c = (mean(temp, na.rm = TRUE) - 32)* 5/9) %>%
+  pull(mean_temp_c)
+```
+
+
+### Самолеты какой авиакомпании совершили больше всего вылетов в июне?
+```{r}
+june_flights <- flights %>%
+  filter(month == 6)
+
+# 2) посчитать вылеты по каждому перевозчику
+carrier_counts <- june_flights %>%
+  group_by(carrier) %>%
+  summarise(departures = n()) %>%
+  arrange(desc(departures))
+
+# 3) вывести лидера(-ей)
+top_carriers <- head(carrier_counts, n = 1)
+
+top_carriers
+```
+
+
+### Самолеты какой авиакомпании задерживались чаще других в 2013 году?
+```{r}
+library(nycflights13)
+library(dplyr)
+
+flights %>%
+  filter(year == 2013, dep_delay > 0) %>%          # задержки в 2013, dep_delay > 0 минут
+  group_by(carrier) %>%
+  summarise(mean_delays = mean(dep_delay, na.rm = TRUE),
+            count_delays = sum(dep_delay > 0)) %>%
+  arrange(desc(count_delays)) %>%
+  head(1)
+```
+
+## Оценка результата
+
+В результате лабораторной работы мы развили практические навыки использования языка программирования R для обработки данных и закрепили знания базовых типов данных языка R
+
+## Вывод
+
+Таким образом, мы научились использовать функции обработки данных пакета dplyr – функции select(), filter(), mutate(), arrange(), group_by()
+
+

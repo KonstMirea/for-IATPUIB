@@ -1,8 +1,13 @@
 ---
 title: "Исследование информации о состоянии беспроводных сетей"
+subtitle: "Отчет по практике №5"
 author: "KTMUSIC22682@yandex.ru"
-format: html
-editor: visual
+format: 
+  md:
+    output-file: README.md
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
 ## Цель работы
@@ -172,5 +177,501 @@ glimpse(client_data)
 
 ### Задание №4 - Анализ точек доступа - безопасность
 ```{r}
+# Читаем данные правильно (пропускаем первую пустую строку)
+ap_data <- read_csv("https://storage.yandexcloud.net/dataset.ctfsec/P2_wifi_data.csv", 
+                   skip = 1,  # пропускаем первую пустую строку
+                   col_names = TRUE)
 
+# Переименовываем столбцы чтобы убрать пробелы
+colnames(ap_data) <- c("BSSID", "First_time_seen", "Last_time_seen", "channel", 
+                       "Speed", "Privacy", "Cipher", "Authentication", "Power",
+                       "beacons", "IV", "LAN_IP", "ID_length", "ESSID", "Key")
+
+# Ищем OPN точки
+unsafe_aps <- ap_data %>%
+  filter(Privacy == "OPN")
+
+# Выводим результат
+cat("Найдено OPN точек:", nrow(unsafe_aps), "\n")
+
+if(nrow(unsafe_aps) > 0) {
+  print(unsafe_aps %>% select(BSSID, ESSID, channel, Privacy))
+} else {
+  cat("OPN точки не найдены. Проверим все значения Privacy:\n")
+  print(table(ap_data$Privacy))
+}
 ```
+
+
+### Задание №5 - Определение производителей устройств
+```{r}
+# 5.1 Правильная загрузка данных
+library(tidyverse)
+library(readr)
+
+url <- "https://storage.yandexcloud.net/dataset.ctfsec/P2_wifi_data.csv"
+
+# Скачиваем и анализируем файл
+temp_file <- tempfile(fileext = ".csv")
+download.file(url, temp_file, mode = "wb")
+
+# Читаем первые строки для анализа
+file_content <- readLines(temp_file, n = 20)
+cat("Первые 5 строк файла:\n")
+cat(file_content[1:5], sep = "\n")
+
+# Находим где начинаются данные точек доступа
+header_line <- which(str_detect(file_content, "BSSID"))[1]
+cat("Заголовок на строке:", header_line, "\n")
+
+# Читаем данные точек доступа (пропускаем пустые строки до заголовка)
+ap_data <- read_csv(temp_file, 
+                   skip = header_line - 1,
+                   n_max = 1000,  # читаем первые 1000 строк для теста
+                   na = c("", "NA", " "),
+                   show_col_types = FALSE)
+
+cat("Данные загружены. Размер:", dim(ap_data), "\n")
+cat("Столбцы:", colnames(ap_data), "\n")
+
+if(nrow(ap_data) > 0) {
+  # Переименовываем столбцы
+  ap_data_clean <- ap_data
+  colnames(ap_data_clean) <- c("BSSID", "First_time_seen", "Last_time_seen", "channel", 
+                              "Speed", "Privacy", "Cipher", "Authentication", "Power",
+                              "beacons", "IV", "LAN_IP", "ID_length", "ESSID", "Key")[1:ncol(ap_data_clean)]
+  
+  cat("Первые 3 строки данных:\n")
+  print(head(ap_data_clean, 3))
+  
+  # 5.2 Функция для определения производителя
+  get_manufacturer <- function(mac_address) {
+    manufacturers <- list(
+      "00:50:F2" = "Microsoft", "00:0C:29" = "VMware", "00:1B:44" = "Huawei",
+      "00:1D:0F" = "Cisco", "00:23:15" = "Apple", "00:26:BB" = "Apple",
+      "00:1A:11" = "Google", "00:1E:65" = "Samsung", "00:21:6A" = "Samsung",
+      "00:24:90" = "Samsung", "00:0F:F2" = "Buffalo", "00:13:10" = "D-Link",
+      "00:14:6C" = "Netgear", "00:18:4D" = "Netgear", "00:1B:2F" = "Netgear",
+      "00:22:3F" = "TP-Link", "00:23:CD" = "TP-Link"
+    )
+    
+    oui <- str_sub(mac_address, 1, 8)
+    if(oui %in% names(manufacturers)) {
+      return(manufacturers[[oui]])
+    } else {
+      return("Unknown")
+    }
+  }
+  
+  # 5.3 Добавляем производителя
+  ap_data_clean$Manufacturer <- sapply(ap_data_clean$BSSID, get_manufacturer)
+  
+  cat("Производители добавлены. Примеры:\n")
+  print(head(ap_data_clean[c("BSSID", "Manufacturer")], 5))
+  
+  # 5.4 Статистика по производителям
+  manufacturer_table <- table(ap_data_clean$Manufacturer)
+  manufacturer_stats <- as.data.frame(manufacturer_table)
+  names(manufacturer_stats) <- c("Manufacturer", "n")
+  manufacturer_stats <- manufacturer_stats[order(-manufacturer_stats$n), ]
+  
+  cat("Топ производителей:\n")
+  print(head(manufacturer_stats, 10))
+  
+} else {
+  cat("Данные не загрузились. Пропускаем задание 5.\n")
+}
+
+unlink(temp_file)
+```
+
+
+### Задание №6 - Поиск устройств с WPA3
+```{r}
+# 6.1 Ищем устройства с WPA3 в столбце Privacy (6-й столбец)
+wpa3_devices <- ap_data %>%
+  filter(Privacy == "WPA3" | grepl("WPA3", Privacy))
+
+cat("Устройства с WPA3:", nrow(wpa3_devices), "\n")
+
+if(nrow(wpa3_devices) > 0) {
+  print(wpa3_devices %>% select(BSSID, ESSID, Privacy))
+} else {
+  cat("Устройства с WPA3 не обнаружены\n")
+  cat("Доступные типы безопасности:\n")
+  print(unique(ap_data$Privacy))
+}
+```
+
+
+### Задание №7 - Анализ активности точек доступа
+```{r}
+# 7.1 Преобразуем даты и мощность сигнала
+ap_data_activity <- ap_data_clean %>%
+  mutate(
+    First_time = as.POSIXct(First_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+    Last_time = as.POSIXct(Last_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+    activity_duration = as.numeric(difftime(Last_time, First_time, units = "hours")),
+    Power_num = as.numeric(Power)
+  )
+
+# 7.2 Сортировка по времени активности
+ap_by_activity <- ap_data_activity %>%
+  arrange(desc(activity_duration)) %>%
+  select(BSSID, ESSID, First_time, Last_time, activity_duration)
+
+cat("Топ-10 самых активных точек доступа:\n")
+print(head(ap_by_activity, 10))
+
+# 7.3 Анализ мощности сигнала (используем table() вместо count())
+signal_analysis <- ap_data_activity %>%
+  mutate(
+    signal_strength = case_when(
+      Power_num >= -30 ~ "Отличный",
+      Power_num >= -50 ~ "Хороший", 
+      Power_num >= -70 ~ "Средний",
+      Power_num < -70 ~ "Слабый",
+      TRUE ~ "Неизвестно"
+    )
+  )
+
+# Используем table() вместо count() чтобы избежать конфликта
+signal_table <- table(signal_analysis$signal_strength)
+signal_stats <- as.data.frame(signal_table)
+names(signal_stats) <- c("signal_strength", "n")
+signal_stats <- signal_stats[order(-signal_stats$n), ]
+
+cat("\nАнализ мощности сигнала:\n")
+print(signal_stats)
+
+# 7.4 Визуализация мощности сигнала
+if(nrow(signal_stats) > 0) {
+  signal_plot <- signal_stats %>%
+    ggplot(aes(x = signal_strength, y = n)) +
+    geom_col(fill = "purple") +
+    labs(title = "Мощность сигнала точек доступа",
+         x = "Уровень сигнала", 
+         y = "Количество") +
+    theme_minimal()
+  
+  print(signal_plot)
+}
+```
+
+
+### Задание №8 - Визуализация результатов
+```{r}
+# 8.1 График типов безопасности (без count())
+security_table <- table(ap_data_clean$Privacy)
+security_stats <- as.data.frame(security_table)
+names(security_stats) <- c("Privacy", "n")
+security_stats <- security_stats[order(-security_stats$n), ]
+
+security_plot <- security_stats %>%
+  ggplot(aes(x = reorder(Privacy, n), y = n)) +
+  geom_col(fill = "coral") +
+  coord_flip() +
+  labs(title = "Распределение типов безопасности",
+       x = "Тип безопасности", 
+       y = "Количество точек доступа") +
+  theme_minimal()
+
+print(security_plot)
+
+# 8.2 График по каналам (без count())
+channel_table <- table(ap_data_clean$channel)
+channel_stats <- as.data.frame(channel_table)
+names(channel_stats) <- c("channel", "n")
+
+channel_plot <- channel_stats %>%
+  ggplot(aes(x = factor(channel), y = n)) +
+  geom_col(fill = "darkgreen") +
+  labs(title = "Распределение по каналам",
+       x = "Канал", 
+       y = "Количество точек доступа") +
+  theme_minimal()
+
+print(channel_plot)
+
+# 8.3 График производителей (если есть данные)
+if(exists("manufacturer_stats")) {
+  manufacturer_plot <- manufacturer_stats %>%
+    filter(n > 0) %>%
+    ggplot(aes(x = reorder(Manufacturer, n), y = n)) +
+    geom_col(fill = "steelblue") +
+    coord_flip() +
+    labs(title = "Производители точек доступа",
+         x = "Производитель", 
+         y = "Количество") +
+    theme_minimal()
+  
+  print(manufacturer_plot)
+}
+```
+
+
+### Задание №9 - Топ-10 самых быстрых точек доступа
+```{r}
+ap_data_for_speed <- ap_data
+
+# Переименовываем так же как в задании 6
+colnames(ap_data_for_speed) <- c("BSSID", "First_time_seen", "Last_time_seen", "channel", 
+                                "Speed", "Privacy", "Cipher", "Authentication", "Power",
+                                "beacons", "IV", "LAN_IP", "ID_length", "ESSID", "Key")
+
+# Теперь ESSID должны быть заполнены
+cat("Проверяем ESSID в данных для скорости:\n")
+print(head(ap_data_for_speed$ESSID, 10))
+
+# Топ-10 по скорости
+fastest_aps <- ap_data_for_speed %>%
+  mutate(Speed_num = as.numeric(Speed)) %>%
+  filter(!is.na(ESSID) & ESSID != "") %>%  # фильтруем пустые ESSID
+  arrange(desc(Speed_num)) %>%
+  select(BSSID, ESSID, Speed_num, channel) %>%
+  head(10)
+
+cat("Топ-10 самых быстрых точек доступа:\n")
+print(fastest_aps)
+```
+
+
+### Задание №10 - Сортировка по частоте запросов
+```{r}
+# Частота запросов (beacons в час)
+ap_data_clean <- ap_data_clean %>%
+  mutate(
+    First_time = as.POSIXct(First_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+    Last_time = as.POSIXct(Last_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+    duration_hours = as.numeric(difftime(Last_time, First_time, units = "hours")),
+    beacons_per_hour = as.numeric(beacons) / duration_hours
+  )
+
+beacon_rate_sorted <- ap_data_clean %>%
+  filter(!is.na(beacons_per_hour) & is.finite(beacons_per_hour)) %>%
+  arrange(desc(beacons_per_hour)) %>%
+  select(BSSID, ESSID, beacons, duration_hours, beacons_per_hour)
+
+cat("Точки доступа по частоте запросов (по убыванию):\n")
+print(head(beacon_rate_sorted, 10))
+```
+
+
+### Задание №11 - Производители клиентских устройств
+```{r}
+# Используем read.csv вместо read_csv для больших файлов
+client_data <- read.csv("https://storage.yandexcloud.net/dataset.ctfsec/P2_wifi_data.csv", 
+                       skip = 2 + nrow(ap_data),
+                       header = FALSE)
+
+cat("Размер клиентских данных:", dim(client_data), "\n")
+
+if(nrow(client_data) > 0) {
+  # Переименовываем столбцы
+  colnames(client_data) <- c("Station_MAC", "First_time_seen", "Last_time_seen", 
+                            "Power", "packets", "BSSID", "Probed_ESSIDs")
+  
+  cat("Примеры клиентских MAC-адресов:\n")
+  print(head(client_data$Station_MAC, 10))
+  
+  # Простая функция производителя
+  get_manufacturer_simple <- function(mac) {
+    prefix <- substr(mac, 1, 8)
+    
+    # Проверяем основные префиксы
+    if(grepl("00:1B:44|00:1D:0F", prefix)) return("Cisco")
+    if(grepl("00:23:15|00:26:BB", prefix)) return("Apple")
+    if(grepl("00:1E:65|00:21:6A|00:24:90", prefix)) return("Samsung")
+    if(grepl("00:14:6C|00:18:4D|00:1B:2F", prefix)) return("Netgear")
+    if(grepl("00:22:3F|00:23:CD", prefix)) return("TP-Link")
+    if(grepl("00:50:F2", prefix)) return("Microsoft")
+    if(grepl("00:0C:29", prefix)) return("VMware")
+    if(grepl("00:1A:11", prefix)) return("Google")
+    if(grepl("00:0F:F2", prefix)) return("Buffalo")
+    if(grepl("00:13:10", prefix)) return("D-Link")
+    
+    return("Unknown")
+  }
+  
+  # Добавляем производителя
+  client_data$Manufacturer <- sapply(client_data$Station_MAC, get_manufacturer_simple)
+  
+  cat("Статистика производителей:\n")
+  print(table(client_data$Manufacturer))
+}
+```
+
+
+### Задание №12 - Устройства без рандомизации MAC
+```{r}
+if(exists("client_data")) {
+  
+  # Более точная функция определения реальных MAC
+  detect_real_mac_improved <- function(mac) {
+    tryCatch({
+      first_octet <- as.hexmode(str_sub(mac, 1, 2))
+      # Бит U/L (второй младший бит): 0 = глобальный (реальный), 1 = локальный (рандомизированный)
+      ul_bit <- bitwAnd(first_octet, 0x02)
+      return(ul_bit == 0)  # TRUE = реальный MAC
+    }, error = function(e) {
+      return(FALSE)  # в случае ошибки считаем рандомизированным
+    })
+  }
+  
+  # Проверяем все MAC-адреса
+  client_data$is_real_mac <- sapply(client_data$Station_MAC, detect_real_mac_improved)
+  
+  # Статистика
+  cat("Статистика по рандомизации MAC:\n")
+  cat("Всего клиентских устройств:", nrow(client_data), "\n")
+  cat("Устройств с реальными MAC:", sum(client_data$is_real_mac), "\n")
+  cat("Устройств с рандомизированными MAC:", sum(!client_data$is_real_mac), "\n")
+  cat("Процент рандомизированных MAC:", round(mean(!client_data$is_real_mac) * 100, 1), "%\n")
+  
+  # Если есть реальные MAC - покажем их
+  real_mac_devices <- client_data %>%
+    filter(is_real_mac)
+  
+  if(nrow(real_mac_devices) > 0) {
+    cat("\nУстройства без рандомизации MAC:\n")
+    print(real_mac_devices %>% select(Station_MAC, Manufacturer, Probed_ESSIDs))
+  } else {
+    cat("\nВсе устройства используют рандомизированные MAC-адреса.\n")
+    cat("Это нормально для современных iOS/Android устройств для защиты приватности.\n")
+    
+    # Покажем примеры рандомизированных MAC
+    cat("\nПримеры рандомизированных MAC-адресов:\n")
+    randomized_examples <- client_data %>%
+      filter(!is_real_mac) %>%
+      select(Station_MAC, Manufacturer) %>%
+      head(5)
+    print(randomized_examples)
+  }
+  
+  # Дополнительный анализ: проверяем по производителям
+  cat("\nРандомизация по производителям:\n")
+  randomization_by_manufacturer <- client_data %>%
+    group_by(Manufacturer) %>%
+    summarise(
+      total_devices = n(),
+      real_mac_count = sum(is_real_mac),
+      randomized_percent = round(mean(!is_real_mac) * 100, 1),
+      .groups = 'drop'
+    ) %>%
+    arrange(desc(randomized_percent))
+  
+  print(randomization_by_manufacturer)
+}
+```
+
+
+### Задание №13 - Кластеризация запросов по именам
+```{r}
+# Кластеризация по именам точек доступа
+if(exists("client_data")) {
+  client_data <- client_data %>%
+    mutate(
+      First_time = as.POSIXct(First_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+      Last_time = as.POSIXct(Last_time_seen, format = "%Y-%m-%d %H:%M:%S")
+    )
+  
+  clusters <- client_data %>%
+    group_by(Station_MAC, Probed_ESSIDs) %>%
+    summarise(
+      first_appearance = min(First_time),
+      last_appearance = max(Last_time),
+      time_in_range = as.numeric(difftime(last_appearance, first_appearance, units = "mins")),
+      .groups = 'drop'
+    )
+  
+  cat("Кластеры запросов устройств:\n")
+  print(head(clusters, 10))
+}
+```
+
+
+### Задание №14 - Стабильность уровня сигнала
+```{r}
+if(exists("client_data")) {
+  
+  # Преобразуем мощность в числовой формат
+  client_data <- client_data %>%
+    mutate(
+      Power_num = as.numeric(Power),
+      First_time = as.POSIXct(First_time_seen, format = "%Y-%m-%d %H:%M:%S"),
+      Last_time = as.POSIXct(Last_time_seen, format = "%Y-%m-%d %H:%M:%S")
+    )
+  
+  # Проверяем повторяющиеся устройства (используем table() вместо count())
+  device_table <- table(client_data$Station_MAC)
+  device_counts <- as.data.frame(device_table)
+  names(device_counts) <- c("Station_MAC", "n")
+  device_counts <- device_counts[order(-device_counts$n), ]
+  
+  cat("Повторяющиеся устройства (по Station_MAC):\n")
+  print(head(device_counts, 10))
+  
+  # Если есть повторяющиеся устройства - анализируем стабильность
+  if(any(device_counts$n > 1)) {
+    
+    # Группируем по устройствам и анализируем стабильность сигнала
+    stability_analysis <- client_data %>%
+      group_by(Station_MAC) %>%
+      filter(n() > 1) %>%  # только устройства с несколькими измерениями
+      summarise(
+        mean_power = mean(Power_num, na.rm = TRUE),
+        sd_power = sd(Power_num, na.rm = TRUE),
+        cv_power = ifelse(mean_power != 0, sd_power / abs(mean_power), NA),
+        n_measurements = n(),
+        time_range_minutes = as.numeric(difftime(max(Last_time), min(First_time), units = "mins")),
+        .groups = 'drop'
+      ) %>%
+      filter(!is.na(sd_power)) %>%
+      arrange(sd_power)  # сортируем по стабильности (меньше SD = стабильнее)
+    
+    if(nrow(stability_analysis) > 0) {
+      cat("Самые стабильные устройства (по уровню сигнала):\n")
+      print(head(stability_analysis, 10))
+      
+      cat("\nСамые нестабильные устройства:\n")
+      print(tail(stability_analysis, 10))
+    } else {
+      cat("Нет устройств с несколькими измерениями для анализа стабильности.\n")
+    }
+    
+  } else {
+    cat("Все устройства имеют только по одному измерению. Нельзя рассчитать стабильность.\n")
+  }
+  
+  # Альтернативный анализ: стабильность по производителям (используем table())
+  if("Manufacturer" %in% colnames(client_data)) {
+    manufacturer_table <- table(client_data$Manufacturer)
+    manufacturer_counts <- as.data.frame(manufacturer_table)
+    names(manufacturer_counts) <- c("Manufacturer", "n_devices")
+    
+    stability_by_manufacturer <- client_data %>%
+      group_by(Manufacturer) %>%
+      summarise(
+        mean_power = mean(Power_num, na.rm = TRUE),
+        sd_power = sd(Power_num, na.rm = TRUE),
+        cv_power = ifelse(mean_power != 0, sd_power / abs(mean_power), NA),
+        .groups = 'drop'
+      ) %>%
+      filter(!is.na(sd_power)) %>%
+      arrange(sd_power)
+    
+    if(nrow(stability_by_manufacturer) > 0) {
+      cat("\nСтабильность по производителям:\n")
+      print(stability_by_manufacturer)
+    }
+  }
+}
+```
+
+
+## Оценка результата
+В рамках практческой работы была исследована радиоэлектронная обстановка и составлено представление о механизмах работы Wi-Fi сетей на канальном и сетевом уровне модели OSI.
+
+## Вывод
+В практической работе мы использовали навыки написания кода на языке программирования R для обработки данных
+и закрепили знания основных функций обработки данных экосистемы tidyverse языка R.

@@ -1,0 +1,349 @@
+---
+title: "Исследование метаданных DNS трафика"
+author: "KTMUSIC22682@yandex.ru"
+format: html
+editor: visual
+---
+
+## Цель работы
+
+1.  Зекрепить практические навыки использования языка программирования R для обработки данных
+2.  Закрепить знания основных функций обработки данных экосистемы tidyverse языка R
+3.  Закрепить навыки исследования метаданных DNS трафика
+
+## Исходные данные
+
+1.  Программное обеспечение macOS Tahoe (26.0.1)
+2.  RStudio
+3.  Интерпретатор языка R 4.5.1
+
+## План
+
+1.  Импортируйте данные DNS – https://storage.yandexcloud.net/dataset.ctfsec/dns.zip Данные были собраны с помощью сетевого анализатора zeek
+2.  Добавьте пропущенные данные о структуре данных (назначении столбцов)
+3.  Преобразуйте данные в столбцах в нужный формат,просмотрите общую структуру данных с помощью функции glimpse()
+4.  Сколько участников информационного обмена всети Доброй Организации?
+5.  Какое соотношение участников обмена внутрисети и участников обращений к внешним ресурсам?
+6.  Найдите топ-10 участников сети, проявляющих наибольшую сетевую активность.
+7.  Найдите топ-10 доменов, к которым обращаются пользователи сети и соответственное количество обращений
+8.  Опеределите базовые статистические характеристики (функция summary() ) интервала времени между последовательными обращениями к топ-10 доменам.
+9.  Часто вредоносное программное обеспечение использует DNS канал в качестве канала управления, периодически отправляя запросы на подконтрольный злоумышленникам DNS сервер. По периодическим запросам на один и тот же домен можно выявить скрытый DNS канал. Есть ли такие IP адреса в исследуемом датасете?
+10. Определите местоположение (страну, город) и организацию-провайдера для топ-10 доменов. Для этого можно использовать сторонние сервисы,например http://ip-api.com (API-эндпоинт – http://ip-api.com/json).
+
+## Ход работы
+
+Устаонвка пакетов: 
+install readr 
+install stringr 
+install httr 
+install jsonlite
+
+### У
+```{r}
+library(readr)
+library(stringr)
+library(httr)
+library(jsonlite)
+temp_dir <- tempdir()
+download.file(
+  url = "https://storage.yandexcloud.net/dataset.ctfsec/dns.zip",
+  destfile = file.path(temp_dir, "dns.zip"),
+  mode = "wb"
+)
+unzip(
+  zipfile = file.path(temp_dir, "dns.zip"),
+  exdir = temp_dir
+)
+log_files <- list.files(temp_dir, pattern = "\\.log$", full.names = TRUE)
+```
+
+
+### Просмотрите общую структуру данных с помощью функции glimpse()
+```{r}
+#fields ts uid id.orig_h id.orig_p id.resp_h id.resp_p proto trans_id rtt query qclass qclass_name qtype qtype_name rcode rcode_name AA TC RD RA Z answers TTLs rejected
+library(dplyr)
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p","proto","trans_id","rtt",
+                   "query","qclass","qclass_name","qtype","qtype_name","rcode","rcode_name",
+                   "AA","TC","RD","RA","Z","answers","TTLs","rejected")
+dns <- type_convert(dns)
+glimpse(dns)
+```
+
+
+### Сколько участников информационного обмена в сети Доброй Организации?
+```{r}
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p","proto","trans_id","rtt",
+                   "query","qclass","qclass_name","qtype","qtype_name","rcode","rcode_name",
+                   "AA","TC","RD","RA","Z","answers","TTLs","rejected")
+dns <- type_convert(dns)
+
+# Подсчет уникальных участников
+unique_ips <- union(dns$id.orig_h, dns$id.resp_h)
+number_of_participants <- length(unique_ips)
+
+number_of_participants
+```
+
+
+### Какое соотношение участников обмена внутри сети и участников обращений к внешним ресурсам?
+```{r}
+library(dplyr)
+library(readr)
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p","proto","trans_id","rtt",
+                   "query","qclass","qclass_name","qtype","qtype_name","rcode","rcode_name",
+                   "AA","TC","RD","RA","Z","answers","TTLs","rejected")
+dns <- type_convert(dns)
+
+# Функция для проверки внутреннего IP (пример для 192.168.x.x)
+is_internal_ip <- function(ip) {
+  grepl("^192\\.168\\.", ip)
+}
+
+# Все уникальные IP
+all_ips <- union(dns$id.orig_h, dns$id.resp_h)
+
+# Классифицируем IP
+internal_ips <- Filter(is_internal_ip, all_ips)
+external_ips <- setdiff(all_ips, internal_ips)
+
+# Количество участников
+num_internal <- length(internal_ips)
+num_external <- length(external_ips)
+
+# Соотношение
+ratio <- num_internal / num_external
+
+list(internal_participants = num_internal,
+     external_participants = num_external,
+     internal_to_external_ratio = ratio)
+```
+
+
+### Найдите топ-10 участников сети, проявляющих наибольшую сетевую активность.
+```{r}
+# Правильный объединенный список уникальных участников
+all_participants <- union(dns$id.orig_h, dns$id.resp_h)
+
+# Подсчёт активных участников
+activity_counts <- dns %>%
+  group_by(id.orig_h, id.resp_h) %>%
+  summarise(activity = n()) %>%
+  ungroup()
+
+# Топ-10 участников по активности
+top10 <- activity_counts %>%
+  mutate(participant = if_else(activity >= max(activity)/2, id.orig_h, id.resp_h)) %>%
+  count(participant, sort = TRUE) %>%
+  top_n(10, n)
+
+top10
+
+```
+
+
+### Найдите топ-10 доменов, к которым обращаются пользователи сети и соответственное количество обращений
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p","proto","trans_id","rtt",
+                   "query","qclass","qclass_name","qtype","qtype_name","rcode","rcode_name",
+                   "AA","TC","RD","RA","Z","answers","TTLs","rejected")
+dns <- type_convert(dns)
+
+# Очистка domain (query)
+dns <- dns %>%
+  mutate(query = str_trim(query)) %>%
+  filter(query != "" & !is.na(query))
+
+# Подсчет топ 10
+top_domains <- dns %>%
+  count(query, sort = TRUE) %>%
+  head(10)
+
+print(top_domains)
+
+```
+
+
+### Опеределите базовые статистические характеристики (функция summary() ) интервала времени между последовательными обращениями к топ-10 доменам.
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+
+# Импорт данных с пропуском комментариев
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+
+# Назначаем имена столбцов
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p",
+                   "proto","trans_id","rtt","query","qclass","qclass_name","qtype",
+                   "qtype_name","rcode","rcode_name","AA","TC","RD","RA","Z",
+                   "answers","TTLs","rejected")
+
+# Преобразование типов
+dns <- type_convert(dns)
+
+# Здесь убран фильтр по регулярному выражению для поля query
+dns_data_clean <- dns %>%
+  mutate(query = str_trim(query)) %>%
+  filter(query != "" & !is.na(query))
+
+# Получаем топ-10 доменов по количеству запросов
+top_10_domains <- dns_data_clean %>%
+  count(query, sort = TRUE) %>%
+  head(10) %>%
+  pull(query)
+
+# Фильтруем и сортируем согласно топ-10
+dns_top <- dns_data_clean %>%
+  filter(query %in% top_10_domains) %>%
+  arrange(query, ts)
+
+# Вычисляем интервалы между последовательными запросами к каждому домену
+dns_intervals <- dns_top %>%
+  group_by(query) %>%
+  mutate(interval = ts - lag(ts)) %>%
+  filter(!is.na(interval))
+
+# Считаем базовые статистики интервалов
+summary_stats <- dns_intervals %>%
+  group_by(query) %>%
+  summarise(
+    Median = median(interval),
+    Mean = mean(interval),
+    Q3 = quantile(interval, 0.75),
+    Max = max(interval)
+  ) %>%
+  arrange(desc(Mean))
+
+print(summary_stats)
+```
+
+
+### Часто вредоносное программное обеспечение использует DNS канал в качестве канала управления, периодически отправляя запросы на подконтрольный злоумышленникам DNS сервер. По периодическим запросам на один и тот же домен можно выявить скрытый DNS канал. Есть ли такие IP адреса в исследуемом датасете?
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+
+# Импорт и подготовка данных
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p",
+                   "proto","trans_id","rtt","query","qclass","qclass_name","qtype",
+                   "qtype_name","rcode","rcode_name","AA","TC","RD","RA","Z",
+                   "answers","TTLs","rejected")
+dns <- type_convert(dns)
+dns$ts <- as.numeric(dns$ts)
+
+# Очистка query от пустых
+dns_clean <- dns %>%
+  filter(!is.na(query) & query != "") %>%
+  mutate(query = str_trim(query))
+
+# Рассчитываем интервалы для каждого IP и домена
+dns_intervals <- dns_clean %>%
+  group_by(id.orig_h, query) %>%
+  arrange(ts) %>%
+  mutate(interval = ts - lag(ts)) %>%
+  filter(!is.na(interval))
+
+# Рассчитываем статистики интервалов и фильтруем по регулярности
+regular_intervals <- dns_intervals %>%
+  summarise(
+    mean_interval = mean(interval),
+    sd_interval = sd(interval),
+    count = n()
+  ) %>%
+  filter(count > 5 & sd_interval < 10) %>%  # выставить порог дисперсии и минимум обращений
+  arrange(sd_interval)
+
+# Выводим IP и домены с признаками периодичности
+print(regular_intervals)
+```
+
+
+### Определите местоположение (страну, город) и организацию-провайдера для топ-10 доменов. Для этого можно использовать сторонние сервисы, например http:/ /ip-api.com (API-эндпоинт – http:/ /ip-api.com/json).
+```{r}
+library(dplyr)
+library(readr)
+library(stringr)
+library(httr)
+library(jsonlite)
+
+# Импорт Zeek DNS
+dns <- read_tsv("dns.log", comment = "#", col_names = FALSE)
+
+# Назначаем имена столбцов
+colnames(dns) <- c("ts","uid","id.orig_h","id.orig_p","id.resp_h","id.resp_p",
+                   "proto","trans_id","rtt","query","qclass","qclass_name","qtype",
+                   "qtype_name","rcode","rcode_name","AA","TC","RD","RA","Z",
+                   "answers","TTLs","rejected")
+dns <- type_convert(dns)
+
+# Очищаем query
+dns_data_clean <- dns %>%
+  mutate(query = str_trim(query)) %>%
+  filter(query != "" & !is.na(query))
+
+# Топ-10 доменов
+top_10_domains <- dns_data_clean %>%
+  count(query, sort = TRUE) %>%
+  head(10) %>%
+  pull(query)
+
+# Без фильтра по регулярке — анализируем любые значения!
+# Функция разрешения домена к IP через nslookup
+resolve_domain_to_ip <- function(domain) {
+  res <- suppressWarnings(system2("nslookup", domain, stdout = TRUE))
+  ip_line <- grep("Address:", res, value = TRUE)
+  ips <- sub("Address: ", "", ip_line)
+  ips <- ips[!grepl("[a-zA-Z]", ips)]          # IP, а не доменное имя
+  if(length(ips) > 0) {
+    return(trimws(ips[1]))
+  } else {
+    return(NA)
+  }
+}
+
+# Функция запроса к ip-api.com c таймаутом и проверкой формата IP
+ip_lookup_info <- function(ip) {
+  ip <- trimws(ip)
+  if(!grepl("^\\d{1,3}(\\.\\d{1,3}){3}$", ip)) return(NULL)
+  url <- paste0("http://ip-api.com/json/", ip)
+  resp <- try(GET(url, timeout(10)), silent = TRUE)
+  if(inherits(resp, "try-error")) return(NULL)
+  if(resp$status_code == 200) {
+    content <- content(resp, as = "text", encoding = "UTF-8")
+    json <- fromJSON(content)
+    if(json$status == "success") return(json)
+  }
+  return(NULL)
+}
+
+# Основной цикл
+results <- data.frame()
+
+for(domain in top_10_domains) {
+  ip <- resolve_domain_to_ip(domain)
+  if(is.na(ip)) next
+  info <- ip_lookup_info(ip)
+  if(is.null(info)) next
+  results <- rbind(results, data.frame(
+    domain = domain,
+    ip = ip,
+    country = info$country,
+    city = info$city,
+    isp = info$isp,
+    stringsAsFactors = FALSE
+  ))
+}
+
+print(results)
+
+```

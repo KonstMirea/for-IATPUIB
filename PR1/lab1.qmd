@@ -21,6 +21,7 @@ format:
 6.  Запустить и выполнить следующите подкурсы: 1.Базовые структурные блоки (Basic Building Blocks) 2.Рабочие пространства и файлы (Workspace and Files) 3.Последовательности чисел (Sequences of Numbers)
 7.  Векторы (Vectors) 5.Пропущенные значения (Missing Values)
 
+```{r}
 | In its simplest form, R can be used as an interactive calculator. Type 5 + 7 and press Enter.
 > 
 > 
@@ -575,7 +576,7 @@ Selection: 1
 | Inf?
 > Inf - Inf
 [1] NaN
-
+```
 
 ## Оценка результатов
 

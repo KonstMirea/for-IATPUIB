@@ -22,6 +22,10 @@ format:
 7.  Векторы (Vectors) 5.Пропущенные значения (Missing Values)
 
 ```{r}
+sessionInfo()
+```
+
+```
 | In its simplest form, R can be used as an interactive calculator. Type 5 + 7 and press Enter.
 > 
 > 

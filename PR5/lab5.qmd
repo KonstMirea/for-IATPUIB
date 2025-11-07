@@ -1,0 +1,176 @@
+---
+title: "Исследование информации о состоянии беспроводных сетей"
+author: "KTMUSIC22682@yandex.ru"
+format: html
+editor: visual
+---
+
+## Цель работы
+
+1. Получить знания о методах исследования радиоэлектронной обстановки.
+2. Составить представление о механизмах работы Wi-Fi сетей на канальном и
+сетевом уровне модели OSI.
+3. Зекрепить практические навыки использования языка программирования R для
+обработки данных
+4. Закрепить знания основных функций обработки данных экосистемы tidyverse
+языка R
+
+## Исходные данные
+
+1.  Программное обеспечение macOS Tahoe (26.0.1)
+2.  RStudio
+3.  Интерпретатор языка R 4.5.1
+
+## План
+1.  Импортируйте данные – https://storage.yandexcloud.net/dataset.ctfsec/P2_wifi_data.csv Данные были собраны с помощью анализатора беспроводного трафика airodump-ng
+2.  Привести датасеты в вид “аккуратных данных”, преобразовать типы столбцов в соответствии с типом данных
+3.  Просмотрите общую структуру данных с помощью функции glimpse()
+4.  Произвести анализ данных.
+5.  Определить небезопасные точки доступа (без шифрования – OPN)
+6.  Определить производителя для каждого обнаруженного устройства
+7.  Выявить устройства, использующие последнюю версию протокола шифрования WPA3, и названия точек доступа, реализованных на этих устройствах
+8.  Отсортировать точки доступа по интервалу времени, в течение которого они находились на связи, по убыванию.
+9.  Обнаружить топ-10 самых быстрых точек доступа.
+10. Отсортировать точки доступа по частоте отправки запросов (beacons) в единицу времени по их убыванию. 11.Определить производителя для каждого обнаруженного устройства (пользоваться базой данных производителей из состава Wireshark или онлайн сервисами OUI lookup)
+12. Обнаружить устройства, которые НЕ рандомизируют свой MAC адрес
+13. Кластеризовать запросы от устройств к точкам доступа по их именам. Определить время появления устройства в зоне радиовидимости и время выхода его из нее.
+14. Оценить стабильность уровня сигнала внури кластера во времени. Выявить наиболее стабильный кластер.
+
+## Ход работы 
+```{r}
+library("readr")
+library("dplyr")
+library("tidyr") 
+library("stringr") 
+library("lubridate") 
+library("janitor") 
+library("R.utils") 
+library("jsonlite") 
+library("httr") 
+library("V8") 
+library("igraph") 
+library("fpc") 
+library("mclust")
+library("tidyverse")
+```
+
+
+### Здание №1 - Импортируйте данные.
+```{r}
+# 1.2 Скачивание файла с Яндекс Облака
+url <- "https://storage.yandexcloud.net/dataset.ctfsec/P2_wifi_data.csv"
+temp_file <- tempfile(fileext = ".csv")
+download.file(url, temp_file, mode = "wb")
+cat("Файл успешно скачан!\n")
+
+# 1.3 Анализ структуры файла
+file_content <- readLines(temp_file, n = 50)
+cat("Первые 5 строк файла:\n")
+cat(head(file_content, 5), sep = "\n")
+```
+
+
+### Задание №2 - Разделение данных на два датасета
+```{r}
+# 2.1 Находим разделитель
+separator_line <- which(str_detect(file_content, "BSSID|Station MAC"))
+cat("Разделитель на строке:", separator_line, "\n")
+
+# 2.2 Импортируем данные точек доступа
+ap_data <- read_csv(temp_file, 
+                   skip = 1,
+                   n_max = separator_line[1] - 2,
+                   col_names = FALSE,
+                   na = c("", "NA", " "),
+                   show_col_types = FALSE)
+
+# 2.3 Импортируем данные клиентов
+client_data <- read_csv(temp_file, 
+                       skip = separator_line[1],
+                       col_names = FALSE,
+                       na = c("", "NA", " "),
+                       show_col_types = FALSE)
+
+cat("Точек доступа:", nrow(ap_data), "\n")
+cat("Клиентских записей:", nrow(client_data), "\n")
+```
+
+
+### Задание №3 - Приведение данных к "аккуратному" виду
+```{r}
+# 3.0 Просмотрим фактические имена столбцов перед переименованием
+cat("Фактические имена столбцов в ap_data:\n")
+print(colnames(ap_data))
+
+cat("Фактические имена столбцов в client_data:\n")
+print(colnames(client_data))
+
+# 3.1 Создаем правильные имена столбцов (адаптируем под реальные данные)
+create_ap_colnames <- function(num_cols) {
+  base_names <- c("BSSID", "First_time_seen", "Last_time_seen", "channel", 
+                  "speed", "privacy", "cipher", "authentication", "power",
+                  "beacons", "IV", "LAN_IP", "id_length", "ESSID", "key")
+  return(base_names[1:num_cols])
+}
+
+create_client_colnames <- function(num_cols) {
+  base_names <- c("Station_MAC", "First_time_seen", "Last_time_seen", "power",
+                  "packets", "BSSID", "Probed_ESSIDs")
+  return(base_names[1:num_cols])
+}
+
+# 3.2 Применяем имена столбцов
+colnames(ap_data) <- create_ap_colnames(ncol(ap_data))
+colnames(client_data) <- create_client_colnames(ncol(client_data))
+
+# Проверяем результат
+cat("Новые имена столбцов в ap_data:\n")
+print(colnames(ap_data))
+
+# 3.3 Преобразуем типы данных (с проверкой наличия столбцов)
+ap_data_clean <- ap_data
+
+# Проверяем и преобразуем каждый столбец, если он существует
+if ("First_time_seen" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(First_time_seen = parse_datetime(First_time_seen))
+}
+
+if ("Last_time_seen" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(Last_time_seen = parse_datetime(Last_time_seen))
+}
+
+if ("channel" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(channel = as.integer(channel))
+}
+
+if ("power" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(power = as.integer(power))
+}
+
+if ("beacons" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(beacons = as.integer(beacons))
+}
+
+if ("IV" %in% colnames(ap_data)) {
+  ap_data_clean <- ap_data_clean %>%
+    mutate(IV = as.integer(IV))
+}
+
+# 3.4 Просмотр структуры очищенных данных
+cat("Структура очищенных данных точек доступа:\n")
+glimpse(ap_data_clean)
+
+cat("\nСтруктура данных клиентов:\n")
+glimpse(client_data)
+```
+
+
+### Задание №4 - Анализ точек доступа - безопасность
+```{r}
+
+```

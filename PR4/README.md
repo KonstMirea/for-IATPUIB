@@ -694,50 +694,39 @@ cat("\n=== РЕЗУЛЬТАТЫ ===\n")
 print(results)
 ```
 
-              Domain                     IP       Country          City
-    1     google.com         142.250.73.142 United States Mountain View
-    2    youtube.com 2607:f8b0:4004:c23::5b United States    Washington
-    3   facebook.com         157.240.229.35 United States       Ashburn
-    4      baidu.com          220.181.7.203         China       Beijing
-    5  wikipedia.org         208.80.154.224 United States San Francisco
-    6         qq.com         123.150.76.218         China       Youyilu
-    7     taobao.com          59.82.121.163         China      Hangzhou
-    8      yahoo.com 2001:4998:24:120d::1:1 United States        Quincy
-    9     amazon.com           98.87.170.74 United States       Ashburn
-    10   twitter.com           172.66.0.227        Canada       Toronto
-                                             ISP
-    1                                 Google LLC
-    2                                 Google LLC
-    3                             Facebook, Inc.
-    4  IDC, China Telecommunications Corporation
-    5                  Wikimedia Foundation Inc.
-    6                                  Tianjij, 
-    7            Hangzhou Alibaba Advertising Co
-    8                         Oath Holdings Inc.
-    9                                 AT&T Corp.
-    10                          Cloudflare, Inc.
-                                 Organization
-    1                              Google LLC
-    2                 Google Public DNS (iad)
-    3                          Facebook, Inc.
-    4                                        
-    5                Wikimedia Foundation Inc
-    6                             Chinanet TJ
-    7  Hangzhou Alibaba Advertising Co., Ltd.
-    8                       Oath Holdings Inc
-    9    Amazon Technologies Inc. (us-east-1)
-    10                       Cloudflare, Inc.
-                                                      AS  Status
-    1                                 AS15169 Google LLC success
-    2                                 AS15169 Google LLC success
-    3                             AS32934 Facebook, Inc. success
-    4  AS23724 IDC, China Telecommunications Corporation success
-    5                  AS14907 Wikimedia Foundation Inc. success
-    6                             AS58542 Tianjij,300000 success
-    7      AS37963 Hangzhou Alibaba Advertising Co.,Ltd. success
-    8                        AS10310 Yahoo Holdings Inc. success
-    9                           AS14618 Amazon.com, Inc. success
-    10                          AS13335 Cloudflare, Inc. success
+              Domain                IP       Country          City
+    1     google.com   192.178.155.138 United States Mountain View
+    2    youtube.com   192.178.155.136 United States Mountain View
+    3   facebook.com       31.13.70.36 United States   Los Angeles
+    4      baidu.com      39.156.70.37         China     Guangzhou
+    5  wikipedia.org    208.80.154.224 United States San Francisco
+    6         qq.com    113.108.81.189         China     Guangzhou
+    7     taobao.com 2408:4001:f10::6f         China       Beijing
+    8      yahoo.com     98.137.11.163 United States        Quincy
+    9     amazon.com      98.87.170.71 United States       Ashburn
+    10   twitter.com   162.159.140.229        Canada       Toronto
+                                   ISP                         Organization
+    1                       Google LLC                           Google LLC
+    2                       Google LLC                           Google LLC
+    3                   Facebook, Inc.       Meta Platforms Ireland Limited
+    4                     China Mobile                         China Mobile
+    5        Wikimedia Foundation Inc.             Wikimedia Foundation Inc
+    6                         Chinanet                          Chinanet GD
+    7  Hangzhou Alibaba Advertising Co            Aliyun Computing Co., LTD
+    8               Oath Holdings Inc.                    Oath Holdings Inc
+    9                       AT&T Corp. Amazon Technologies Inc. (us-east-1)
+    10                Cloudflare, Inc.                     Cloudflare, Inc.
+                                                       AS  Status
+    1                                  AS15169 Google LLC success
+    2                                  AS15169 Google LLC success
+    3                              AS32934 Facebook, Inc. success
+    4  AS9808 China Mobile Communications Group Co., Ltd. success
+    5                   AS14907 Wikimedia Foundation Inc. success
+    6                            AS4134 CHINANET-BACKBONE success
+    7       AS37963 Hangzhou Alibaba Advertising Co.,Ltd. success
+    8                         AS36647 Yahoo Holdings Inc. success
+    9                            AS14618 Amazon.com, Inc. success
+    10                           AS13335 Cloudflare, Inc. success
 
 ``` r
 # Красивое отображение результатов
@@ -773,32 +762,32 @@ if (nrow(results) > 0) {
     === СВОДНАЯ ИНФОРМАЦИЯ ===
 
     1. google.com
-       IP-адрес: 142.250.73.142
+       IP-адрес: 192.178.155.138
        Страна: United States
        Город: Mountain View
        Провайдер: Google LLC
        Организация: Google LLC
 
     2. youtube.com
-       IP-адрес: 2607:f8b0:4004:c23::5b
+       IP-адрес: 192.178.155.136
        Страна: United States
-       Город: Washington
+       Город: Mountain View
        Провайдер: Google LLC
-       Организация: Google Public DNS (iad)
+       Организация: Google LLC
 
     3. facebook.com
-       IP-адрес: 157.240.229.35
+       IP-адрес: 31.13.70.36
        Страна: United States
-       Город: Ashburn
+       Город: Los Angeles
        Провайдер: Facebook, Inc.
-       Организация: Facebook, Inc.
+       Организация: Meta Platforms Ireland Limited
 
     4. baidu.com
-       IP-адрес: 220.181.7.203
+       IP-адрес: 39.156.70.37
        Страна: China
-       Город: Beijing
-       Провайдер: IDC, China Telecommunications Corporation
-       Организация: 
+       Город: Guangzhou
+       Провайдер: China Mobile
+       Организация: China Mobile
 
     5. wikipedia.org
        IP-адрес: 208.80.154.224
@@ -808,35 +797,35 @@ if (nrow(results) > 0) {
        Организация: Wikimedia Foundation Inc
 
     6. qq.com
-       IP-адрес: 123.150.76.218
+       IP-адрес: 113.108.81.189
        Страна: China
-       Город: Youyilu
-       Провайдер: Tianjij, 
-       Организация: Chinanet TJ
+       Город: Guangzhou
+       Провайдер: Chinanet
+       Организация: Chinanet GD
 
     7. taobao.com
-       IP-адрес: 59.82.121.163
+       IP-адрес: 2408:4001:f10::6f
        Страна: China
-       Город: Hangzhou
+       Город: Beijing
        Провайдер: Hangzhou Alibaba Advertising Co
-       Организация: Hangzhou Alibaba Advertising Co., Ltd.
+       Организация: Aliyun Computing Co., LTD
 
     8. yahoo.com
-       IP-адрес: 2001:4998:24:120d::1:1
+       IP-адрес: 98.137.11.163
        Страна: United States
        Город: Quincy
        Провайдер: Oath Holdings Inc.
        Организация: Oath Holdings Inc
 
     9. amazon.com
-       IP-адрес: 98.87.170.74
+       IP-адрес: 98.87.170.71
        Страна: United States
        Город: Ashburn
        Провайдер: AT&T Corp.
        Организация: Amazon Technologies Inc. (us-east-1)
 
     10. twitter.com
-       IP-адрес: 172.66.0.227
+       IP-адрес: 162.159.140.229
        Страна: Canada
        Город: Toronto
        Провайдер: Cloudflare, Inc.

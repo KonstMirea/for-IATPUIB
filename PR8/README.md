@@ -82,7 +82,7 @@ sessionInfo()
 графики вывести в виде единого дашборда в Yandex DataLens. \####
 Итоговый дашборд ![](screenshot/screenshot9.png)
 
-#### Ссылка на дашборд - https://datalens.ru/uetsmzab8krke-dashboard-constantine
+[Ссылка на дашборд](https://datalens.yandex/uetsmzab8krke)
 
 ## Оценка результатов
 
